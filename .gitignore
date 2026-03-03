@@ -1,0 +1,35 @@
+# Virtual environment
+.venv/
+
+# Generated output files
+output/
+
+# Whisper model cache
+~/.cache/huggingface/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Pytest / test cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

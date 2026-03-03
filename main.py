@@ -1,0 +1,86 @@
+"""
+main.py — CLI entry point for course-summarizer.
+
+Usage:
+    python main.py start
+    python main.py start --whisper-model small --ollama-model mistral --output-dir output
+    python main.py devices     # list available WASAPI loopback devices
+"""
+
+import argparse
+import sys
+
+
+def cmd_start(args) -> None:
+    from pipeline import Pipeline
+    p = Pipeline(
+        whisper_model=args.whisper_model,
+        ollama_model=args.ollama_model,
+        output_dir=args.output_dir,
+    )
+    p.start()
+    p.wait()
+
+
+def cmd_devices(args) -> None:
+    """List available WASAPI loopback devices."""
+    try:
+        import pyaudiowpatch as pyaudio
+    except ImportError:
+        print("ERROR: pyaudiowpatch is not installed. Run: pip install pyaudiowpatch")
+        sys.exit(1)
+
+    pa = pyaudio.PyAudio()
+    print("\nAvailable WASAPI loopback devices:\n")
+    found = False
+    for i in range(pa.get_device_count()):
+        info = pa.get_device_info_by_index(i)
+        if info.get("isLoopbackDevice", False):
+            print(f"  [{i}] {info['name']}")
+            print(f"       Channels: {info['maxInputChannels']}  "
+                  f"Sample rate: {info['defaultSampleRate']} Hz")
+            found = True
+    if not found:
+        print("  No loopback devices found.")
+    pa.terminate()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        prog="course-summarizer",
+        description="Capture system audio, transcribe, detect topics, and produce a Markdown summary.",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # ── start ────────────────────────────────────────────────────────────────
+    start_parser = subparsers.add_parser("start", help="Start capturing and summarizing audio.")
+    start_parser.add_argument(
+        "--whisper-model",
+        default=None,
+        metavar="MODEL",
+        help="Whisper model size: tiny, base, small (default), medium, large-v3",
+    )
+    start_parser.add_argument(
+        "--ollama-model",
+        default=None,
+        metavar="MODEL",
+        help="Ollama model name (must be pulled locally, e.g. mistral, llama3)",
+    )
+    start_parser.add_argument(
+        "--output-dir",
+        default=None,
+        metavar="DIR",
+        help="Directory to write the markdown file (default: output/)",
+    )
+    start_parser.set_defaults(func=cmd_start)
+
+    # ── devices ──────────────────────────────────────────────────────────────
+    devices_parser = subparsers.add_parser("devices", help="List available WASAPI loopback devices.")
+    devices_parser.set_defaults(func=cmd_devices)
+
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()
