@@ -2,6 +2,31 @@
 
 Capture system audio while watching a video course, transcribe it locally with Whisper, detect topic shifts with Ollama, and produce a live-updated Markdown file — all running silently in the background.
 
+- [📚 course-summarizer](#-course-summarizer)
+  - [How it works](#how-it-works)
+  - [Getting Started](#getting-started)
+    - [Step 1 — Install the NVIDIA driver on Windows (optional, for GPU)](#step-1--install-the-nvidia-driver-on-windows-optional-for-gpu)
+    - [Step 2 — Install the CUDA toolkit in WSL (optional, for GPU)](#step-2--install-the-cuda-toolkit-in-wsl-optional-for-gpu)
+    - [Step 3 — Verify PulseAudio in WSL](#step-3--verify-pulseaudio-in-wsl)
+    - [Step 4 — Install and start Ollama in WSL](#step-4--install-and-start-ollama-in-wsl)
+    - [Step 5 — Set up Python and install dependencies](#step-5--set-up-python-and-install-dependencies)
+    - [Step 6 — Install PyTorch with CUDA (optional, for GPU)](#step-6--install-pytorch-with-cuda-optional-for-gpu)
+    - [Step 7 — Run the smoke test](#step-7--run-the-smoke-test)
+    - [Step 8 — Start the app](#step-8--start-the-app)
+  - [Prerequisites summary](#prerequisites-summary)
+  - [Usage](#usage)
+    - [Start capturing](#start-capturing)
+    - [With all options](#with-all-options)
+    - [List audio devices](#list-audio-devices)
+    - [Run the smoke test](#run-the-smoke-test)
+  - [Output format](#output-format)
+  - [Configuration](#configuration)
+    - [Whisper model](#whisper-model)
+    - [Ollama model selection](#ollama-model-selection)
+    - [Topic detection tuning (`TOPIC_WINDOW_SEGMENTS` / `TOPIC_MIN_SEGMENTS`)](#topic-detection-tuning-topic_window_segments--topic_min_segments)
+  - [File structure](#file-structure)
+
+
 ## How it works
 
 ```
