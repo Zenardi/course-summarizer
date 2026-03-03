@@ -92,8 +92,8 @@ pactl list short sources
 # Install Ollama (official Linux installer)
 curl -fsSL https://ollama.com/install.sh | sh
 
-# Pull a model (mistral is a good default, ~4 GB)
-ollama pull mistral
+# Pull the model — llama3.1:8b is recommended for technical courses (~5 GB)
+ollama pull llama3.1:8b
 
 # Start the server (runs in the background)
 ollama serve &
@@ -213,14 +213,14 @@ Press **Ctrl+C** to stop. The app will flush remaining audio, finalize summaries
 ### With all options
 
 ```zsh
-python main.py start --whisper-model small --ollama-model mistral --output-dir output \
+python main.py start --whisper-model large-v3 --ollama-model llama3.1:8b --output-dir output \
   --title "Docker Networking" --module "Docker for Developers"
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--whisper-model` | `small` | `tiny`, `base`, `small`, `medium`, `large-v3` |
-| `--ollama-model` | `mistral` | any model you have pulled via `ollama pull` |
+| `--ollama-model` | `llama3.1:8b` | any model you have pulled via `ollama pull` |
 | `--output-dir` | `output/` | directory to write the markdown file |
 | `--title` | *(none)* | lecture title — improves LLM topic detection and summaries |
 | `--module` | *(none)* | course/module name — gives the LLM domain context |
@@ -299,13 +299,63 @@ The `🔄` icon means the section is still being captured. `✅` means it's been
 Edit `config.py` to change defaults:
 
 ```python
-WHISPER_MODEL = "small"        # tiny/base/small/medium/large-v3
-AUDIO_CHUNK_SECONDS = 30       # seconds per transcription chunk
-SILENCE_THRESHOLD = 0.01       # skip chunks quieter than this RMS
-OLLAMA_MODEL = "mistral"       # must be pulled locally
-TOPIC_WINDOW_SEGMENTS = 5      # segments to analyze for topic shifts
+WHISPER_MODEL = "large-v3"     # tiny/base/small/medium/large-v3
+AUDIO_CHUNK_SECONDS = 45       # seconds per transcription chunk
+SILENCE_THRESHOLD = 0.001      # skip chunks quieter than this RMS
+OLLAMA_MODEL = "llama3.1:8b"   # must be pulled locally
+TOPIC_WINDOW_SEGMENTS = 10     # segments to analyze for topic shifts
+TOPIC_MIN_SEGMENTS = 8         # minimum segments before a shift is considered
 OUTPUT_DIR = "output"          # where .md files are written
 ```
+
+### Whisper model
+
+| Model | Speed | Accuracy | Recommended for |
+|-------|-------|----------|-----------------|
+| `tiny` / `base` | fastest | low | quick tests only |
+| `small` | fast | good | CPU without GPU |
+| `medium` | moderate | best CPU balance | CPU without GPU |
+| `large-v3` | slow on CPU / fast on GPU | highest | **CUDA GPU** ✅ |
+
+### Ollama model selection
+
+The Ollama model handles both topic detection and summary generation. Model choice has a big impact on summary quality for technical content.
+
+| Model | VRAM (Q4) | Technical knowledge | Summary quality | Best for |
+|-------|-----------|--------------------|-----------------|----|
+| `mistral` | ~5 GB | ⭐⭐⭐ | ⭐⭐⭐ | general content |
+| `llama3.1:8b` | ~5 GB | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | **technical courses, 8 GB VRAM** ✅ |
+| `qwen2.5:7b` | ~5 GB | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ML/AI-heavy content |
+| `mixtral:8x7b` | ~5.5 GB | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | best quality, tight on 8 GB |
+
+**`llama3.1:8b`** is the default. Compared to Mistral 7B it has significantly better knowledge of AI, Kubernetes, DevOps, and autonomous systems terminology, and follows complex structured prompts (Overview / Key Concepts / How It Works) more reliably.
+
+To switch models at any time:
+```zsh
+ollama pull qwen2.5:7b
+python main.py start --ollama-model qwen2.5:7b
+```
+
+
+
+Whisper transcribes more accurately with longer audio chunks — it can resolve ambiguous words using surrounding sentence context. `45s` is the sweet spot for short lessons: enough context without too much startup latency.
+
+### Topic detection tuning (`TOPIC_WINDOW_SEGMENTS` / `TOPIC_MIN_SEGMENTS`)
+
+These two settings control how aggressively the app splits the transcript into separate topic sections.
+
+- **`TOPIC_MIN_SEGMENTS`** — minimum segments a topic must accumulate before a split is even considered. Acts as a guard against splitting on the very first sentence of a new topic.
+- **`TOPIC_WINDOW_SEGMENTS`** — how many recent segments are sent to Ollama each time it checks for a topic shift. More segments = more context = fewer false splits.
+
+**Recommended presets:**
+
+| Lesson type | `TOPIC_MIN_SEGMENTS` | `TOPIC_WINDOW_SEGMENTS` |
+|---|---|---|
+| Short / focused (Udacity, ~5–15 min, 1–3 topics) | `8` | `10` ✅ |
+| Medium (30–45 min course, 3–6 topics) | `5` | `7` |
+| Long / dense (1h+, many topic changes) | `3` | `4` |
+
+With the **Udacity preset** (`8` / `10`), a typical 8-minute lesson produces a single deep summary section. Genuine topic shifts (e.g. moving from theory to a hands-on demo) are still detected because the large window gives Ollama enough contrast to recognise the change.
 
 ## File structure
 
