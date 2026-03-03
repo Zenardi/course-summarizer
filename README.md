@@ -5,14 +5,22 @@ Capture system audio while watching a video course, transcribe it locally with W
 - [📚 course-summarizer](#-course-summarizer)
   - [How it works](#how-it-works)
   - [Getting Started](#getting-started)
-    - [Step 1 — Install the NVIDIA driver on Windows (optional, for GPU)](#step-1--install-the-nvidia-driver-on-windows-optional-for-gpu)
-    - [Step 2 — Install the CUDA toolkit in WSL (optional, for GPU)](#step-2--install-the-cuda-toolkit-in-wsl-optional-for-gpu)
-    - [Step 3 — Verify PulseAudio in WSL](#step-3--verify-pulseaudio-in-wsl)
-    - [Step 4 — Install and start Ollama in WSL](#step-4--install-and-start-ollama-in-wsl)
-    - [Step 5 — Set up Python and install dependencies](#step-5--set-up-python-and-install-dependencies)
-    - [Step 6 — Install PyTorch with CUDA (optional, for GPU)](#step-6--install-pytorch-with-cuda-optional-for-gpu)
-    - [Step 7 — Run the smoke test](#step-7--run-the-smoke-test)
-    - [Step 8 — Start the app](#step-8--start-the-app)
+    - [WSL2 (Arch Linux)](#wsl2-arch-linux)
+      - [Step 1 — Install the NVIDIA driver on Windows (optional, for GPU)](#step-1--install-the-nvidia-driver-on-windows-optional-for-gpu)
+      - [Step 2 — Install the CUDA toolkit in WSL (optional, for GPU)](#step-2--install-the-cuda-toolkit-in-wsl-optional-for-gpu)
+      - [Step 3 — Verify PulseAudio in WSL](#step-3--verify-pulseaudio-in-wsl)
+      - [Step 4 — Install and start Ollama in WSL](#step-4--install-and-start-ollama-in-wsl)
+      - [Step 5 — Set up Python and install dependencies](#step-5--set-up-python-and-install-dependencies)
+      - [Step 6 — Install PyTorch with CUDA (optional, for GPU)](#step-6--install-pytorch-with-cuda-optional-for-gpu)
+      - [Step 7 — Run the smoke test](#step-7--run-the-smoke-test)
+      - [Step 8 — Start the app](#step-8--start-the-app)
+    - [macOS (Apple Silicon / Intel)](#macos-apple-silicon--intel)
+      - [Step 1 — Install BlackHole (audio loopback)](#step-1--install-blackhole-audio-loopback)
+      - [Step 2 — Create a Multi-Output Device](#step-2--create-a-multi-output-device)
+      - [Step 3 — Install and start Ollama](#step-3--install-and-start-ollama)
+      - [Step 4 — Set up Python and install dependencies](#step-4--set-up-python-and-install-dependencies)
+      - [Step 5 — Run the smoke test](#step-5--run-the-smoke-test)
+      - [Step 6 — Start the app](#step-6--start-the-app)
   - [Prerequisites summary](#prerequisites-summary)
   - [Usage](#usage)
     - [Start capturing](#start-capturing)
@@ -30,8 +38,8 @@ Capture system audio while watching a video course, transcribe it locally with W
 ## How it works
 
 ```
-[Windows Speaker Output]
-  ↓ WASAPI loopback (pyaudiowpatch) — no virtual cable needed
+[System Audio Output]
+  ↓ WASAPI loopback (Windows) · PulseAudio monitor (WSL/Linux) · BlackHole (macOS)
 AudioCapture thread → audio_queue (30s PCM chunks)
   ↓
 Transcriber thread (faster-whisper) → transcript_queue (timestamped text)
@@ -44,6 +52,10 @@ MarkdownWriter → rewrites output/course_2026-03-03_13-00.md live
 ---
 
 ## Getting Started
+
+---
+
+## WSL2 (Arch Linux)
 
 Follow these steps in order to get the app running on **WSL2 (Arch Linux)**.
 
@@ -210,13 +222,115 @@ Press **Ctrl+C** to stop. The app flushes remaining audio, finalizes summaries, 
 
 ---
 
+## macOS (Apple Silicon / Intel)
+
+macOS does not expose a built-in audio loopback API, so a free virtual audio driver (**BlackHole**) is required to capture system output.
+
+### Step 1 — Install BlackHole (audio loopback)
+
+```zsh
+brew install blackhole-2ch
+```
+
+BlackHole creates a virtual audio device that the app reads as an input source — no paid virtual cable needed.
+
+---
+
+### Step 2 — Create a Multi-Output Device
+
+To hear audio through your speakers **and** capture it simultaneously:
+
+1. Open **Audio MIDI Setup** (search in Spotlight).
+2. Click **`+`** at the bottom-left → **Create Multi-Output Device**.
+3. Check both **BlackHole 2ch** and your speakers (e.g. *MacBook Pro Speakers*).
+4. Right-click the new **Multi-Output Device** → **Use This Device for Sound Output**.
+
+Then in **System Settings → Sound → Output**, select **Multi-Output Device**.
+
+> [!NOTE]
+> If you only need to capture (no monitoring), you can skip the Multi-Output Device and set **BlackHole 2ch** directly as your output device.
+
+---
+
+### Step 3 — Install and start Ollama
+
+```zsh
+# Install Ollama (macOS pkg or Homebrew)
+brew install ollama
+
+# Pull the recommended model (~5 GB)
+ollama pull llama3.1:8b
+
+# Start the server
+ollama serve &
+```
+
+Verify it is running:
+```zsh
+curl http://localhost:11434   # ✔ should return "Ollama is running"
+```
+
+---
+
+### Step 4 — Set up Python and install dependencies
+
+```zsh
+cd course-summarizer
+
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip install -r requirements.txt
+```
+
+Verify core packages:
+```zsh
+python -c "import faster_whisper; print('✔ faster-whisper OK')"
+python -c "import ollama; print('✔ ollama OK')"
+python -c "import sounddevice; print('✔ sounddevice OK')"
+```
+
+---
+
+### Step 5 — Run the smoke test
+
+```zsh
+python test_pipeline.py
+# ✔ Test passed! Markdown file: course_2026-03-03_13-00.md
+```
+
+---
+
+### Step 6 — Start the app
+
+Verify BlackHole is detected:
+```zsh
+python main.py devices
+# ✔ BlackHole 2ch should appear with "← loopback"
+```
+
+Start the app:
+```zsh
+# Basic
+python main.py start
+
+# With lecture context (recommended)
+python main.py start --title "Docker Networking" --module "Docker for Developers"
+```
+
+Press **Ctrl+C** to stop.
+
+---
+
 ## Prerequisites summary
 
 | Requirement | Platform | Notes |
 |-------------|----------|-------|
-| Python 3.10+ | WSL | |
+| Python 3.10+ | WSL / macOS | |
 | PulseAudio | WSL | For audio loopback capture |
-| [Ollama](https://ollama.com) | WSL | Run `ollama serve &` before starting the app |
+| [BlackHole 2ch](https://github.com/ExistentialAudio/BlackHole) | macOS | `brew install blackhole-2ch` |
+| sounddevice | macOS | Installed via `requirements.txt` |
+| [Ollama](https://ollama.com) | WSL / macOS | Run `ollama serve &` before starting the app |
 | NVIDIA driver 465+ | Windows | Only needed for GPU acceleration |
 | CUDA toolkit | WSL | Only needed for GPU acceleration |
 | PyTorch (CUDA) | WSL venv | Only needed for GPU acceleration |

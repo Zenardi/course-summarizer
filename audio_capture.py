@@ -1,11 +1,13 @@
 """
 audio_capture.py — System audio loopback capture, cross-platform.
 
-Supports two backends chosen automatically at runtime:
+Supports three backends chosen automatically at runtime:
   • Windows (native)  → WASAPI loopback via pyaudiowpatch
-  • WSL / Linux       → PulseAudio monitor source via sounddevice
+  • WSL / Linux       → PulseAudio monitor source via parec
+  • macOS (Darwin)    → Virtual loopback device via sounddevice
+                        (requires BlackHole: brew install blackhole-2ch)
 
-Both backends push fixed-length float32 mono PCM chunks (16 kHz) to a
+All backends push fixed-length float32 mono PCM chunks (16 kHz) to a
 thread-safe queue, so the rest of the pipeline is identical regardless
 of platform.
 """
@@ -30,6 +32,10 @@ def _running_on_wsl() -> bool:
 
 def _running_on_windows_native() -> bool:
     return platform.system() == "Windows"
+
+
+def _running_on_macos() -> bool:
+    return platform.system() == "Darwin"
 
 
 # ── Shared silence helper ─────────────────────────────────────────────────────
@@ -184,7 +190,95 @@ class _PulseAudioCapture:
         )
 
 
-# ── Shared resampling helper ──────────────────────────────────────────────────
+
+# ── Backend: Virtual loopback device (macOS) ──────────────────────────────────
+
+class _MacOSCapture:
+    """
+    Captures system audio on macOS via a virtual loopback input device.
+
+    Requires BlackHole (or Soundflower) installed and set as audio output:
+        brew install blackhole-2ch
+    Then in System Settings → Sound → Output, select "BlackHole 2ch".
+
+    To hear audio while capturing, create a Multi-Output Device in
+    Audio MIDI Setup that routes to both BlackHole and your speakers.
+    """
+
+    #: Device name substrings to recognise as loopback devices (case-insensitive)
+    _LOOPBACK_KEYWORDS = ["blackhole", "soundflower", "loopback", "ishowu"]
+
+    def __init__(self, audio_queue: queue.Queue, stop_event: threading.Event):
+        self._queue = audio_queue
+        self._stop = stop_event
+
+    def run(self) -> None:
+        import time
+        import sounddevice as sd
+
+        device_index = self._find_loopback_device(sd)
+        device_info = sd.query_devices(device_index)
+        frames_per_chunk = config.SAMPLE_RATE * config.AUDIO_CHUNK_SECONDS
+
+        accumulated: list[np.ndarray] = []
+        frames_acc = 0
+
+        def _callback(indata: np.ndarray, frames: int, _time, _status) -> None:
+            nonlocal accumulated, frames_acc
+            accumulated.append(indata[:, 0].copy())
+            frames_acc += frames
+            if frames_acc >= frames_per_chunk:
+                chunk = np.concatenate(accumulated).astype(np.float32)
+                accumulated.clear()
+                frames_acc = 0
+                if _is_silent(chunk, config.SILENCE_THRESHOLD):
+                    print("[AudioCapture] Silent chunk skipped.")
+                else:
+                    self._queue.put(chunk)
+
+        print(
+            f"[AudioCapture] macOS loopback: {device_info['name']} "
+            f"({config.SAMPLE_RATE} Hz, mono)"
+        )
+
+        with sd.InputStream(
+            device=device_index,
+            channels=1,
+            samplerate=config.SAMPLE_RATE,
+            dtype="float32",
+            blocksize=int(config.SAMPLE_RATE * 0.1),  # 100 ms blocks
+            callback=_callback,
+        ):
+            while not self._stop.is_set():
+                time.sleep(0.1)
+
+    @classmethod
+    def _find_loopback_device(cls, sd) -> int:
+        """Return the index of the first recognised loopback input device."""
+        devices = sd.query_devices()
+        for i, dev in enumerate(devices):
+            if dev["max_input_channels"] > 0:
+                if any(kw in dev["name"].lower() for kw in cls._LOOPBACK_KEYWORDS):
+                    return i
+
+        input_devs = "\n".join(
+            f"  [{i}] {d['name']}"
+            for i, d in enumerate(devices)
+            if d["max_input_channels"] > 0
+        )
+        raise RuntimeError(
+            "No loopback audio device found on macOS.\n\n"
+            "Install BlackHole to capture system audio:\n"
+            "  brew install blackhole-2ch\n\n"
+            "Then set BlackHole as your audio output in:\n"
+            "  System Settings → Sound → Output → BlackHole 2ch\n\n"
+            "To hear audio while capturing, open Audio MIDI Setup and create\n"
+            "a Multi-Output Device combining BlackHole and your speakers.\n\n"
+            f"Available input devices:\n{input_devs}"
+        )
+
+
+
 
 def _to_mono_16k(audio: np.ndarray, n_channels: int, src_rate: int) -> np.ndarray:
     """Downmix to mono and resample to 16 kHz (Whisper's expected rate)."""
@@ -239,6 +333,8 @@ class AudioCapture:
     def _run(self) -> None:
         if _running_on_windows_native():
             backend = _WasapiCapture(self._queue, self._stop_event)
+        elif _running_on_macos():
+            backend = _MacOSCapture(self._queue, self._stop_event)
         else:
             # WSL2 or plain Linux
             backend = _PulseAudioCapture(self._queue, self._stop_event)

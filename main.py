@@ -25,7 +25,27 @@ def cmd_start(args) -> None:
 
 
 def cmd_devices(args) -> None:
-    """List available WASAPI loopback devices."""
+    """List available audio loopback/input devices."""
+    import platform
+    if platform.system() == "Darwin":
+        try:
+            import sounddevice as sd
+        except ImportError:
+            print("ERROR: sounddevice is not installed. Run: pip install sounddevice")
+            sys.exit(1)
+        print("\nAvailable audio input devices (macOS):\n")
+        devices = sd.query_devices()
+        for i, dev in enumerate(devices):
+            if dev["max_input_channels"] > 0:
+                marker = " ← loopback" if any(
+                    kw in dev["name"].lower()
+                    for kw in ["blackhole", "soundflower", "loopback", "ishowu"]
+                ) else ""
+                print(f"  [{i}] {dev['name']}{marker}")
+                print(f"       Channels: {dev['max_input_channels']}  "
+                      f"Sample rate: {int(dev['default_samplerate'])} Hz")
+        return
+
     try:
         import pyaudiowpatch as pyaudio
     except ImportError:
