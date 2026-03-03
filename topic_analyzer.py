@@ -51,9 +51,13 @@ class TopicAnalyzer:
         self,
         transcript_queue: queue.Queue,
         on_update,  # callable()
+        lecture_title: str | None = None,
+        module_name: str | None = None,
     ):
         self._transcript_q = transcript_queue
         self._on_update = on_update
+        self._lecture_title = lecture_title
+        self._module_name = module_name
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -122,8 +126,10 @@ class TopicAnalyzer:
         recent_text = " ".join(s.text for s in self._pending_segments)
         context_text = self._current.transcript_text[-2000:]  # last ~2000 chars for context
 
+        course_ctx = self._build_course_context()
         prompt = (
-            f"You are analyzing a transcript of an educational video course.\n\n"
+            f"You are analyzing a transcript of an educational video course.\n"
+            f"{course_ctx}"
             f"Current topic: \"{self._current.title}\"\n\n"
             f"Recent transcript:\n{recent_text}\n\n"
             f"Has the topic clearly shifted to something new and distinct? "
@@ -165,20 +171,32 @@ class TopicAnalyzer:
             return
         section = self._current
         print(f"[TopicAnalyzer] Summarizing '{section.title}'…")
-        summary = self._summarize(section)
+        summary = self._summarize(section, self._build_course_context())
         with self._lock:
             section.summary = summary
             section.is_finalized = True
         self._on_update()
 
+    def _build_course_context(self) -> str:
+        """Build a context string for LLM prompts based on provided lecture/module info."""
+        parts = []
+        if self._module_name:
+            parts.append(f"Course/Module: \"{self._module_name}\"")
+        if self._lecture_title:
+            parts.append(f"Lecture: \"{self._lecture_title}\"")
+        if parts:
+            return "\n".join(parts) + "\n\n"
+        return "\n"
+
     @staticmethod
-    def _summarize(section: TopicSection) -> str:
+    def _summarize(section: TopicSection, course_context: str = "\n") -> str:
         transcript = section.transcript_text
         if not transcript.strip():
             return "_No content to summarize._"
 
         prompt = (
-            f"You are creating study documentation for a section of an educational video course.\n\n"
+            f"You are creating study documentation for a section of an educational video course.\n"
+            f"{course_context}"
             f"Topic: \"{section.title}\"\n\n"
             f"Transcript:\n{transcript}\n\n"
             f"Write comprehensive study notes that a student can use to fully understand and "

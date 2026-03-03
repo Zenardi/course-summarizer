@@ -17,6 +17,8 @@ def cmd_start(args) -> None:
         whisper_model=args.whisper_model,
         ollama_model=args.ollama_model,
         output_dir=args.output_dir,
+        lecture_title=args.title,
+        module_name=args.module,
     )
     p.start()
     p.wait()
@@ -71,6 +73,18 @@ def main() -> None:
         default=None,
         metavar="DIR",
         help="Directory to write the markdown file (default: output/)",
+    )
+    start_parser.add_argument(
+        "--title",
+        default=None,
+        metavar="TITLE",
+        help="Lecture title — gives the LLM context for better summaries (e.g. 'Docker Networking')",
+    )
+    start_parser.add_argument(
+        "--module",
+        default=None,
+        metavar="MODULE",
+        help="Course or module name — gives the LLM domain context (e.g. 'Docker for Developers')",
     )
     start_parser.set_defaults(func=cmd_start)
 

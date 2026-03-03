@@ -171,13 +171,17 @@ python test_pipeline.py
 > brave
 > ```
 
-Open your course in Firefox, then in a separate terminal start the app:
+Open your course in Brave, then in a separate terminal start the app:
 
 ```zsh
+# Basic — no context
 python main.py start
+
+# With lecture context (recommended — gives the LLM better accuracy)
+python main.py start --title "Docker Networking" --module "Docker for Developers"
 ```
 
-Press **Ctrl+C** to stop. The app flushes remaining audio, finalizes summaries, and closes the file. Output is saved to `output/course_YYYY-MM-DD_HH-MM.md`.
+Press **Ctrl+C** to stop. The app flushes remaining audio, finalizes summaries, and closes the file. Output is saved to `output/course_YYYY-MM-DD_HH-MM.md` (or `output/<lecture-title-slug>_YYYY-MM-DD_HH-MM.md` when `--title` is provided).
 
 ---
 
@@ -197,22 +201,29 @@ Press **Ctrl+C** to stop. The app flushes remaining audio, finalizes summaries, 
 ### Start capturing
 
 ```zsh
+# Minimal
 python main.py start
+
+# With lecture context (recommended)
+python main.py start --title "Kubernetes Pods and Services" --module "Kubernetes Fundamentals"
 ```
 
 Press **Ctrl+C** to stop. The app will flush remaining audio, finalize summaries, and close the file.
 
-### With options
+### With all options
 
 ```zsh
-python main.py start --whisper-model small --ollama-model mistral --output-dir output
+python main.py start --whisper-model small --ollama-model mistral --output-dir output \
+  --title "Docker Networking" --module "Docker for Developers"
 ```
 
-| Flag | Default | Options |
-|------|---------|---------|
+| Flag | Default | Description |
+|------|---------|-------------|
 | `--whisper-model` | `small` | `tiny`, `base`, `small`, `medium`, `large-v3` |
 | `--ollama-model` | `mistral` | any model you have pulled via `ollama pull` |
-| `--output-dir` | `output/` | any directory path |
+| `--output-dir` | `output/` | directory to write the markdown file |
+| `--title` | *(none)* | lecture title — improves LLM topic detection and summaries |
+| `--module` | *(none)* | course/module name — gives the LLM domain context |
 
 ### List audio devices
 
@@ -228,10 +239,12 @@ python test_pipeline.py
 
 ## Output format
 
-Files are saved to `output/course_YYYY-MM-DD_HH-MM.md`:
+Files are saved to `output/course_YYYY-MM-DD_HH-MM.md`, or `output/<title-slug>_YYYY-MM-DD_HH-MM.md` when `--title` is provided.
 
 ```markdown
-# 📚 Course Transcript — 2026-03-03 13:00
+# 📚 Docker for Developers — Docker Networking
+
+*Recorded on 2026-03-03 13:00*
 
 ---
 

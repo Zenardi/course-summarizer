@@ -28,7 +28,7 @@ class Pipeline:
         p.wait()   # blocks until Ctrl+C
     """
 
-    def __init__(self, whisper_model: str | None = None, ollama_model: str | None = None, output_dir: str | None = None):
+    def __init__(self, whisper_model: str | None = None, ollama_model: str | None = None, output_dir: str | None = None, lecture_title: str | None = None, module_name: str | None = None):
         # Allow CLI overrides
         if whisper_model:
             config.WHISPER_MODEL = whisper_model
@@ -36,6 +36,9 @@ class Pipeline:
             config.OLLAMA_MODEL = ollama_model
         if output_dir:
             config.OUTPUT_DIR = output_dir
+
+        self._lecture_title = lecture_title
+        self._module_name = module_name
 
         self._session_start_dt = datetime.now()
         self._session_start_ts = time.time()
@@ -49,11 +52,15 @@ class Pipeline:
             topics=[],          # will be replaced after analyzer is created
             lock=threading.Lock(),
             session_start=self._session_start_dt,
+            lecture_title=self._lecture_title,
+            module_name=self._module_name,
         )
 
         self._analyzer = TopicAnalyzer(
             transcript_queue=self._transcript_queue,
             on_update=self._writer.notify,
+            lecture_title=self._lecture_title,
+            module_name=self._module_name,
         )
 
         # Wire the writer to the analyzer's shared topics list
@@ -74,6 +81,10 @@ class Pipeline:
     def start(self) -> None:
         print("=" * 60)
         print("  course-summarizer starting…")
+        if self._module_name:
+            print(f"  Module        : {self._module_name}")
+        if self._lecture_title:
+            print(f"  Lecture       : {self._lecture_title}")
         print(f"  Whisper model : {config.WHISPER_MODEL}")
         print(f"  Ollama model  : {config.OLLAMA_MODEL}")
         print(f"  Output dir    : {config.OUTPUT_DIR}")
